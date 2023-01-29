@@ -1,0 +1,191 @@
+---
+title: "Classifying Breast Cancer Tumors"
+output: html_document
+---
+```{r, include = FALSE}
+library(tidyverse)
+library(purrr)
+library(tidyr)
+library(ggplot2)
+library(scales)
+library(caret)
+library(multiUS)
+library(glmnet)
+
+bc = read.csv("./breast_cancer_wisconsin.data", encoding="UTF-16LE", header = FALSE)
+names(bc) = c('ID', 'Clump Thickness', 'Uniformity of Cell Size', 'Uniformity of Cell Shape', 'Marginal Adhesion', 'Single Epithelial Cell Size', 'Bare Nuclei', 'Bland Chromatin', 'Normal Nucleoli', 'Mitoses', 'Class')
+
+bc = bc %>% 
+  janitor::clean_names() %>% 
+  dplyr::select(-id) %>%
+  mutate(bare_nuclei = as.numeric(na_if(bare_nuclei, '?')))
+
+bc$class = ifelse(bc$class == "2", 0, 1)
+```
+# Logistic Regression to Classify Tumors as Malignant or Benign
+
+In this analysis, I will be performing logistic regression (classification) to identify if tumors in patients should be classified as malignant or benign based on measurements of several variables. The dataset, titled "Breast Cancer Wisconsin (Original)," comes from the University of California, Irvine Machine Learning Repository.^[https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+%28Original%29]
+
+The data contains variables to measure characteristics such as clump thickness, uniformity of cell size/shape, marginal adhesion, single epithelial cell size, bare nuclei, bland chromatin, normal nucleoli, and mitoses. The data also contains information that classifies tumors as malignant or benign. 
+
+### Exploratory Data Analysis
+
+There are `r bc %>% count()` observations in the data.
+
+#### Checking NAs
+
+The first step of this analysis will be to check for missing values.
+```{r}
+colSums(is.na(bc))
+```
+
+There are 16 missing values in the `bare_nuclei` column. As there is no indication of why there are missing values in the dataset, I will impute the missing values using the k-nearest neighbors algorithm.
+
+```{r}
+set.seed(2023)
+bc = KNNimp(bc, k = 10, scale = TRUE, meth = "weighAvg", distData = NULL)
+```
+
+#### Graphing Independent Variables
+
+In order to conduct exploratory data analysis, I will graph the distributions of the variables and check for any other issues present in the data.
+
+```{r, message = FALSE}
+bc %>% 
+  dplyr::select(-"class") %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_histogram()
+```
+None of the variables appear to be distributed normally, but this should not pose a problem for the logistic regression. 
+
+#### Graphing Dependent Variable
+```{r}
+ggplot(bc, aes(x = factor(class), fill = class)) +  
+  geom_bar(aes(y = (after_stat(count))/sum(after_stat(count)))) +
+  scale_y_continuous(labels = percent) +
+  labs(title = "Percent of Malignant and Benign", x = "Class", y = "Percent") +
+  theme(legend.position = "none")
+```
+Plotting the class variable, there does not appear to be an issue with class imbalance.
+
+#### Checking Correlation
+
+The next step will be to assess correlation between variables in the data. A key assumption of logistic regression requires that there is little multicollinearity present in the data. 
+
+```{r, warning = FALSE}
+corrplot::corrplot(cor(bc), addCoef.col = "White", number.cex = 0.8, number.digits = 1, diag = FALSE, bg = "grey", outline = "black", addgrid.col = "white", marc = c(1, 1, 1, 1))
+
+rstatix::cor_mat(bc) %>% 
+  knitr::kable(digits = 3)
+```
+The correlation plot above indicates relatively high correlation between uniformity of cell size and uniformity of cell shape (a value of 0.91). Going forward, I will create two models: one using the uniformity of cell shape variable and one using the uniformity of cell size variable.
+
+```{r}
+bc2 = bc %>% dplyr::select(-"uniformity_of_cell_shape")
+bc = bc %>% dplyr::select(-"uniformity_of_cell_size")
+```
+
+#### Splitting Test and Training Data
+
+```{r}
+bc$class = as.factor(bc$class)
+set.seed(2023)
+bc$id = 1:nrow(bc)
+train =  bc %>% dplyr::sample_frac(0.70)
+test  =  dplyr::anti_join(bc, train, by = 'id')
+train = train %>% dplyr::select(-id)
+test = test %>% dplyr::select(-id)
+
+bc2$class = as.factor(bc2$class)
+bc2$id = 1:nrow(bc2)
+train2 =  bc2 %>% dplyr::sample_frac(0.70)
+test2  =  dplyr::anti_join(bc2, train2, by = 'id')
+train2 = train2 %>% dplyr::select(-id)
+test2 = test2 %>% dplyr::select(-id)
+```
+
+I have assigned 70% (`r nrow(train)` observations) of the data to the training dataset and 30% (`r nrow(test)` observations) of the data to the test dataset.
+
+## Building the Model
+
+I will build a logistic regression model using 10-fold cross validation and the LASSO shrinkage method. The first model will contain uniformity in cell shape while the second will contain uniformity in cell size.
+
+```{r}
+ctrlspecs = trainControl(method = "cv", 
+                          number = 10,
+                          savePredictions = "all")
+
+lambda_vector = 10^seq(5, -5, length = 500)
+
+set.seed(2023)
+
+model1 = train(class ~ ., 
+                data = train,
+                preProcess = c("center","scale"),
+                method = "glmnet",
+                tuneGrid = expand.grid(alpha = 1, lambda = lambda_vector),
+                trControl = ctrlspecs,
+                na.action = na.omit)
+
+model2 = train(class ~ ., 
+                data = train2,
+                preProcess = c("center","scale"),
+                method = "glmnet",
+                tuneGrid = expand.grid(alpha = 1, lambda = lambda_vector),
+                trControl = ctrlspecs,
+                na.action = na.omit)
+```
+
+The optimal lambda value for model 1 gives us the following coefficients for the model:
+```{r}
+coef(model1$finalModel, model1$bestTune$lambda)
+```
+There appears to be a positive relationship between every dependent variable and malignant tumor status. The single epithelial cell size was determined to not have an influence on determining malignant tumors. This model has a `r round(max(model1$results$Accuracy) * 100, 2)`% accuracy on the training data.
+
+The optimal lambda value for model 2 gives us the following coefficients for the model:
+```{r}
+coef(model2$finalModel, model2$bestTune$lambda)
+```
+There appears to be a positive relationship between every dependent variable and malignant tumor status. This model has a `r round(max(model2$results$Accuracy) * 100, 2)`% accuracy on the training data.
+
+Since Model 2 performed better on the training data, I will be selecting model 2 (which removes uniformity in cell shape) for this analysis. 
+
+## Assessing Final Model Performance
+
+Using the test data set aside earlier, the model's accuracy, precision, and recall can be assessed. 
+```{r}
+test_x = test2 %>% 
+  dplyr::select(-class)
+
+predictions = predict(model2, newdata = test_x)
+
+test2 = cbind(test2, predictions)
+
+test2$class = as.numeric(test2$class)
+test2$predictions = as.numeric(test2$predictions)
+
+test2$difference = test2$class - test2$predictions
+
+correct = sum(test2$difference == 0)
+true_positive = sum(test2['class'] == 2 & test2['predictions'] == 2)
+true_negative = sum(test2['class'] == 1 & test2['predictions'] == 1)
+false_negative = sum(test2$difference == 1)
+false_positive = sum(test2$difference == -1)
+
+accuracy = correct/nrow(test2)
+precision = true_positive/(true_positive + false_positive)
+recall = true_positive/(true_positive + false_negative)
+```
+The model has an accuracy of `r round(accuracy*100, 2)`%, a precision of `r round(precision*100, 2)`%, and a recall of `r round(recall*100, 2)`%. This shows that the model has done fairly well in identifying if tumors are benign or malignant. 
+
+## Citations:
+This breast cancer databases was obtained from the University of Wisconsin Hospitals, Madison from Dr. William H. Wolberg.
+1. O. L. Mangasarian and W. H. Wolberg: "Cancer diagnosis via linear programming", SIAM News, Volume 23, Number 5, September 1990, pp 1 & 18.
+2. William H. Wolberg and O.L. Mangasarian: "Multisurface method of pattern separation for medical diagnosis applied to breast cytology", Proceedings of the National Academy of Sciences, U.S.A., Volume 87, December 1990, pp 9193-9196.
+3. O. L. Mangasarian, R. Setiono, and W.H. Wolberg: "Pattern recognition via linear programming: Theory and application to medical diagnosis", in: "Large-scale numerical optimization", Thomas F. Coleman and Yuying Li, editors, SIAM Publications, Philadelphia 1990, pp 22-30.
+4. K. P. Bennett & O. L. Mangasarian: "Robust linear programming discrimination of two linearly inseparable sets", Optimization Methods and Software 1, 1992, 23-34 (Gordon & Breach Science Publishers).
+
+
