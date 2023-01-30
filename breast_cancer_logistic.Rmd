@@ -81,6 +81,13 @@ The next step will be to assess correlation between variables in the data. A key
 corrplot::corrplot(cor(bc), addCoef.col = "White", number.cex = 0.8, number.digits = 1, diag = FALSE, bg = "grey", outline = "black", addgrid.col = "white", marc = c(1, 1, 1, 1))
 ```
 
+```{css, echo=FALSE}
+table {
+  display: block;
+  overflow-x: scroll;
+}
+```
+
 ```{r, fig.width = 5}
 rstatix::cor_mat(bc) %>% 
   knitr::kable(digits = 3)
