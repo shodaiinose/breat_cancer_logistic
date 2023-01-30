@@ -59,6 +59,7 @@ bc %>%
     facet_wrap(~ key, scales = "free") +
     geom_histogram()
 ```
+
 None of the variables appear to be distributed normally, but this should not pose a problem for the logistic regression. 
 
 #### Graphing Dependent Variable
@@ -69,6 +70,7 @@ ggplot(bc, aes(x = factor(class), fill = class)) +
   labs(title = "Percent of Malignant and Benign", x = "Class", y = "Percent") +
   theme(legend.position = "none")
 ```
+
 Plotting the class variable, there does not appear to be an issue with class imbalance.
 
 #### Checking Correlation
@@ -77,10 +79,13 @@ The next step will be to assess correlation between variables in the data. A key
 
 ```{r, warning = FALSE}
 corrplot::corrplot(cor(bc), addCoef.col = "White", number.cex = 0.8, number.digits = 1, diag = FALSE, bg = "grey", outline = "black", addgrid.col = "white", marc = c(1, 1, 1, 1))
+```
 
+```{r, fig.width = 5}
 rstatix::cor_mat(bc) %>% 
   knitr::kable(digits = 3)
 ```
+
 The correlation plot above indicates relatively high correlation between uniformity of cell size and uniformity of cell shape (a value of 0.91). Going forward, I will create two models: one using the uniformity of cell shape variable and one using the uniformity of cell size variable.
 
 ```{r}
@@ -140,15 +145,19 @@ model2 = train(class ~ .,
 ```
 
 The optimal lambda value for model 1 gives us the following coefficients for the model:
+
 ```{r}
 coef(model1$finalModel, model1$bestTune$lambda)
 ```
+
 There appears to be a positive relationship between every dependent variable and malignant tumor status. The single epithelial cell size was determined to not have an influence on determining malignant tumors. This model has a `r round(max(model1$results$Accuracy) * 100, 2)`% accuracy on the training data.
 
 The optimal lambda value for model 2 gives us the following coefficients for the model:
+
 ```{r}
 coef(model2$finalModel, model2$bestTune$lambda)
 ```
+
 There appears to be a positive relationship between every dependent variable and malignant tumor status. This model has a `r round(max(model2$results$Accuracy) * 100, 2)`% accuracy on the training data.
 
 Since Model 2 performed better on the training data, I will be selecting model 2 (which removes uniformity in cell shape) for this analysis. 
@@ -156,6 +165,7 @@ Since Model 2 performed better on the training data, I will be selecting model 2
 ## Assessing Final Model Performance
 
 Using the test data set aside earlier, the model's accuracy, precision, and recall can be assessed. 
+
 ```{r}
 test_x = test2 %>% 
   dplyr::select(-class)
@@ -179,13 +189,19 @@ accuracy = correct/nrow(test2)
 precision = true_positive/(true_positive + false_positive)
 recall = true_positive/(true_positive + false_negative)
 ```
+
 The model has an accuracy of `r round(accuracy*100, 2)`%, a precision of `r round(precision*100, 2)`%, and a recall of `r round(recall*100, 2)`%. This shows that the model has done fairly well in identifying if tumors are benign or malignant. 
 
 ## Citations:
+
 This breast cancer databases was obtained from the University of Wisconsin Hospitals, Madison from Dr. William H. Wolberg.
+
 1. O. L. Mangasarian and W. H. Wolberg: "Cancer diagnosis via linear programming", SIAM News, Volume 23, Number 5, September 1990, pp 1 & 18.
+
 2. William H. Wolberg and O.L. Mangasarian: "Multisurface method of pattern separation for medical diagnosis applied to breast cytology", Proceedings of the National Academy of Sciences, U.S.A., Volume 87, December 1990, pp 9193-9196.
+
 3. O. L. Mangasarian, R. Setiono, and W.H. Wolberg: "Pattern recognition via linear programming: Theory and application to medical diagnosis", in: "Large-scale numerical optimization", Thomas F. Coleman and Yuying Li, editors, SIAM Publications, Philadelphia 1990, pp 22-30.
+
 4. K. P. Bennett & O. L. Mangasarian: "Robust linear programming discrimination of two linearly inseparable sets", Optimization Methods and Software 1, 1992, 23-34 (Gordon & Breach Science Publishers).
 
 
