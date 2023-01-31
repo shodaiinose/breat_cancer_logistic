@@ -1,6 +1,7 @@
 ---
 title: "Classifying Breast Cancer Tumors"
 output: html_document
+author: "Shodai Inose"
 ---
 ```{r, include = FALSE}
 library(tidyverse)
