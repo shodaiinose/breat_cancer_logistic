@@ -611,9 +611,9 @@ table {
 </table>
 <p>The correlation plot above indicates relatively high correlation
 between uniformity of cell size and uniformity of cell shape (a value of
-0.91). Going forward, I will create two models: one using the uniformity
-of cell shape variable and one using the uniformity of cell size
-variable.</p>
+0.91). Going forward, I will create several models: some using the
+uniformity of cell shape variable and some using the uniformity of cell
+size variable.</p>
 <pre class="r"><code>bc2 = bc %&gt;% dplyr::select(-&quot;uniformity_of_cell_shape&quot;)
 bc = bc %&gt;% dplyr::select(-&quot;uniformity_of_cell_size&quot;)</code></pre>
 </div>
@@ -639,7 +639,9 @@ dataset and 30% (210 observations) of the data to the test dataset.</p>
 </div>
 <div id="building-the-model" class="section level2">
 <h2>Building the Model</h2>
-<p>I will build a logistic regression model using 10-fold cross
+<div id="lasso" class="section level4">
+<h4>LASSO</h4>
+<p>I will build logistic regression models using 10-fold cross
 validation and the LASSO shrinkage method. The first model will contain
 uniformity in cell shape while the second will contain uniformity in
 cell size.</p>
@@ -701,9 +703,70 @@ coefficients for the model:</p>
 <p>There appears to be a positive relationship between every dependent
 variable and malignant tumor status. This model has a 97.35% accuracy on
 the training data.</p>
-<p>Since Model 2 performed better on the training data, I will be
-selecting model 2 (which removes uniformity in cell shape) for this
-analysis.</p>
+</div>
+<div id="ridge-regression" class="section level4">
+<h4>Ridge Regression</h4>
+<p>I wil also build logistic regression models using 10-fold cross
+validation and the ridge regression shrinkage method. The first model
+will contain uniformity in cell shape while the second will contain
+uniformity in cell size.</p>
+<pre class="r"><code>model3 = train(class ~ ., 
+                data = train,
+                preProcess = c(&quot;center&quot;,&quot;scale&quot;),
+                method = &quot;glmnet&quot;,
+                tuneGrid = expand.grid(alpha = 0, lambda = lambda_vector),
+                trControl = ctrlspecs,
+                na.action = na.omit)
+
+model4 = train(class ~ ., 
+                data = train2,
+                preProcess = c(&quot;center&quot;,&quot;scale&quot;),
+                method = &quot;glmnet&quot;,
+                tuneGrid = expand.grid(alpha = 0, lambda = lambda_vector),
+                trControl = ctrlspecs,
+                na.action = na.omit)</code></pre>
+<p>The optimal lambda value for model 3 gives us the following
+coefficients for the model:</p>
+<pre class="r"><code>coef(model3$finalModel, model3$bestTune$lambda)</code></pre>
+<pre><code>## 9 x 1 sparse Matrix of class &quot;dgCMatrix&quot;
+##                                     s1
+## (Intercept)                 -1.0866010
+## clump_thickness              0.6192355
+## uniformity_of_cell_shape     0.5634892
+## marginal_adhesion            0.3662689
+## single_epithelial_cell_size  0.3625390
+## bare_nuclei                  0.6520105
+## bland_chromatin              0.5075916
+## normal_nucleoli              0.3050112
+## mitoses                      0.2612588</code></pre>
+<p>There appears to be a positive relationship between every dependent
+variable and malignant tumor status. The single epithelial cell size was
+determined to not have an influence on determining malignant tumors.
+This model has a 96.71% accuracy on the training data.</p>
+<p>The optimal lambda value for model 4 gives us the following
+coefficients for the model:</p>
+<pre class="r"><code>coef(model4$finalModel, model4$bestTune$lambda)</code></pre>
+<pre><code>## 9 x 1 sparse Matrix of class &quot;dgCMatrix&quot;
+##                                     s1
+## (Intercept)                 -1.0532903
+## clump_thickness              0.6904039
+## uniformity_of_cell_size      0.6126270
+## marginal_adhesion            0.3521697
+## single_epithelial_cell_size  0.3623066
+## bare_nuclei                  0.7555820
+## bland_chromatin              0.5793811
+## normal_nucleoli              0.4786727
+## mitoses                      0.2852485</code></pre>
+<p>There appears to be a positive relationship between every dependent
+variable and malignant tumor status. This model has a 97.33% accuracy on
+the training data.</p>
+</div>
+</div>
+<div id="choosing-a-final-model" class="section level2">
+<h2>Choosing a Final Model</h2>
+<p>It appears that model 2 has the highest accuracy at 97.35%, which
+means I will be selecting model 2 (using LASSO shrinkage and containing
+the uniformity in cell size variable).</p>
 </div>
 <div id="assessing-final-model-performance" class="section level2">
 <h2>Assessing Final Model Performance</h2>

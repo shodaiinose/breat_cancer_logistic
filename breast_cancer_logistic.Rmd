@@ -94,7 +94,7 @@ rstatix::cor_mat(bc) %>%
   knitr::kable(digits = 3)
 ```
 
-The correlation plot above indicates relatively high correlation between uniformity of cell size and uniformity of cell shape (a value of 0.91). Going forward, I will create two models: one using the uniformity of cell shape variable and one using the uniformity of cell size variable.
+The correlation plot above indicates relatively high correlation between uniformity of cell size and uniformity of cell shape (a value of 0.91). Going forward, I will create several models: some using the uniformity of cell shape variable and some using the uniformity of cell size variable.
 
 ```{r}
 bc2 = bc %>% dplyr::select(-"uniformity_of_cell_shape")
@@ -124,7 +124,9 @@ I have assigned 70% (`r nrow(train)` observations) of the data to the training d
 
 ## Building the Model
 
-I will build a logistic regression model using 10-fold cross validation and the LASSO shrinkage method. The first model will contain uniformity in cell shape while the second will contain uniformity in cell size.
+#### LASSO 
+
+I will build logistic regression models using 10-fold cross validation and the LASSO shrinkage method. The first model will contain uniformity in cell shape while the second will contain uniformity in cell size.
 
 ```{r}
 ctrlspecs = trainControl(method = "cv", 
@@ -168,7 +170,47 @@ coef(model2$finalModel, model2$bestTune$lambda)
 
 There appears to be a positive relationship between every dependent variable and malignant tumor status. This model has a `r round(max(model2$results$Accuracy) * 100, 2)`% accuracy on the training data.
 
-Since Model 2 performed better on the training data, I will be selecting model 2 (which removes uniformity in cell shape) for this analysis. 
+#### Ridge Regression
+I wil also build logistic regression models using 10-fold cross validation and the ridge regression shrinkage method. The first model will contain uniformity in cell shape while the second will contain uniformity in cell size.
+
+```{r}
+
+model3 = train(class ~ ., 
+                data = train,
+                preProcess = c("center","scale"),
+                method = "glmnet",
+                tuneGrid = expand.grid(alpha = 0, lambda = lambda_vector),
+                trControl = ctrlspecs,
+                na.action = na.omit)
+
+model4 = train(class ~ ., 
+                data = train2,
+                preProcess = c("center","scale"),
+                method = "glmnet",
+                tuneGrid = expand.grid(alpha = 0, lambda = lambda_vector),
+                trControl = ctrlspecs,
+                na.action = na.omit)
+```
+
+The optimal lambda value for model 3 gives us the following coefficients for the model:
+
+```{r}
+coef(model3$finalModel, model3$bestTune$lambda)
+```
+
+There appears to be a positive relationship between every dependent variable and malignant tumor status. The single epithelial cell size was determined to not have an influence on determining malignant tumors. This model has a `r round(max(model3$results$Accuracy) * 100, 2)`% accuracy on the training data.
+
+The optimal lambda value for model 4 gives us the following coefficients for the model:
+
+```{r}
+coef(model4$finalModel, model4$bestTune$lambda)
+```
+
+There appears to be a positive relationship between every dependent variable and malignant tumor status. This model has a `r round(max(model4$results$Accuracy) * 100, 2)`% accuracy on the training data.
+
+## Choosing a Final Model
+
+It appears that model 2 has the highest accuracy at `r round(max(model2$results$Accuracy) * 100, 2)`%, which means I will be selecting model 2 (using LASSO shrinkage and containing the uniformity in cell size variable).
 
 ## Assessing Final Model Performance
 
