@@ -142,16 +142,14 @@ model1 = train(class ~ .,
                 preProcess = c("center","scale"),
                 method = "glmnet",
                 tuneGrid = expand.grid(alpha = 1, lambda = lambda_vector),
-                trControl = ctrlspecs,
-                na.action = na.omit)
+                trControl = ctrlspecs)
 
 model2 = train(class ~ ., 
                 data = train2,
                 preProcess = c("center","scale"),
                 method = "glmnet",
                 tuneGrid = expand.grid(alpha = 1, lambda = lambda_vector),
-                trControl = ctrlspecs,
-                na.action = na.omit)
+                trControl = ctrlspecs)
 ```
 
 The optimal lambda value for model 1 gives us the following coefficients for the model:
@@ -254,4 +252,4 @@ This breast cancer databases was obtained from the University of Wisconsin Hospi
 
 4. K. P. Bennett & O. L. Mangasarian: "Robust linear programming discrimination of two linearly inseparable sets", Optimization Methods and Software 1, 1992, 23-34 (Gordon & Breach Science Publishers).
 
-
+Aspects of the code were developed from "R for HR: An Introduction to Human Resource Analytics Using R"^[https://rforhr.com/] by David E. Caughlin.^[https://creativecommons.org/licenses/by-nc-sa/4.0/]

@@ -658,16 +658,14 @@ model1 = train(class ~ .,
                 preProcess = c(&quot;center&quot;,&quot;scale&quot;),
                 method = &quot;glmnet&quot;,
                 tuneGrid = expand.grid(alpha = 1, lambda = lambda_vector),
-                trControl = ctrlspecs,
-                na.action = na.omit)
+                trControl = ctrlspecs)
 
 model2 = train(class ~ ., 
                 data = train2,
                 preProcess = c(&quot;center&quot;,&quot;scale&quot;),
                 method = &quot;glmnet&quot;,
                 tuneGrid = expand.grid(alpha = 1, lambda = lambda_vector),
-                trControl = ctrlspecs,
-                na.action = na.omit)</code></pre>
+                trControl = ctrlspecs)</code></pre>
 <p>The optimal lambda value for model 1 gives us the following
 coefficients for the model:</p>
 <pre class="r"><code>coef(model1$finalModel, model1$bestTune$lambda)</code></pre>
@@ -819,12 +817,16 @@ discrimination of two linearly inseparable sets”, Optimization Methods
 and Software 1, 1992, 23-34 (Gordon &amp; Breach Science
 Publishers).</p></li>
 </ol>
+<p>Aspects of the code were developed from “R for HR: An Introduction to
+Human Resource Analytics Using R”<a href="#fn2" class="footnote-ref" id="fnref2"><sup>2</sup></a> by David E. Caughlin.<a href="#fn3" class="footnote-ref" id="fnref3"><sup>3</sup></a></p>
 </div>
 </div>
 <div class="footnotes footnotes-end-of-document">
 <hr />
 <ol>
 <li id="fn1"><p><a href="https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+%28Original%29" class="uri">https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+%28Original%29</a><a href="#fnref1" class="footnote-back">↩︎</a></p></li>
+<li id="fn2"><p><a href="https://rforhr.com/" class="uri">https://rforhr.com/</a><a href="#fnref2" class="footnote-back">↩︎</a></p></li>
+<li id="fn3"><p><a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" class="uri">https://creativecommons.org/licenses/by-nc-sa/4.0/</a><a href="#fnref3" class="footnote-back">↩︎</a></p></li>
 </ol>
 </div>
 
