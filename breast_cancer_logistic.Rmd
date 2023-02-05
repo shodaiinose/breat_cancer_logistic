@@ -23,9 +23,9 @@ bc = bc %>%
 
 bc$class = ifelse(bc$class == "2", 0, 1)
 ```
-# Logistic Regression to Classify Tumors as Malignant or Benign
+# Logistic Regression and KNN to Classify Tumors as Malignant or Benign
 
-In this analysis, I will be performing logistic regression (classification) to identify if tumors in patients should be classified as malignant or benign based on measurements of several variables. The dataset, titled "Breast Cancer Wisconsin (Original)," comes from the University of California, Irvine Machine Learning Repository.^[https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+%28Original%29]
+In this analysis, I will be performing logistic regression and k-nearest neighbors (classification) to identify if tumors in patients should be classified as malignant or benign based on measurements of several variables. The dataset, titled "Breast Cancer Wisconsin (Original)," comes from the University of California, Irvine Machine Learning Repository.^[https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+%28Original%29]
 
 The data contains variables to measure characteristics such as clump thickness, uniformity of cell size/shape, marginal adhesion, single epithelial cell size, bare nuclei, bland chromatin, normal nucleoli, and mitoses. The data also contains information that classifies tumors as malignant or benign. 
 
@@ -76,7 +76,7 @@ Plotting the class variable, there does not appear to be an issue with class imb
 
 #### Checking Correlation
 
-The next step will be to assess correlation between variables in the data. A key assumption of logistic regression requires that there is little multicollinearity present in the data. 
+The next step will be to assess correlation between variables in the data. A key assumption of logistic regression and knn requires that there is little multicollinearity present in the data. 
 
 ```{r, warning = FALSE}
 corrplot::corrplot(cor(bc), addCoef.col = "White", number.cex = 0.8, number.digits = 1, diag = FALSE, bg = "grey", outline = "black", addgrid.col = "white", marc = c(1, 1, 1, 1))
@@ -94,11 +94,22 @@ rstatix::cor_mat(bc) %>%
   knitr::kable(digits = 3)
 ```
 
-The correlation plot above indicates relatively high correlation between uniformity of cell size and uniformity of cell shape (a value of 0.91). Going forward, I will create several models: some using the uniformity of cell shape variable and some using the uniformity of cell size variable.
+The correlation plot above indicates relatively high correlation between uniformity of cell size and uniformity of cell shape (a value of 0.91). However, using regularization methods in the logistic regression (LASSO and ridge shrinkage methods) should take care of the issues.
+
+#### Normalization
+
+Although the dataset appears to have variables on the same scale, I will be conducting normalization to ensure that all values fall between 0 and 1.
 
 ```{r}
-bc2 = bc %>% dplyr::select(-"uniformity_of_cell_shape")
-bc = bc %>% dplyr::select(-"uniformity_of_cell_size")
+normalize = function(x){
+   (x - min(x))/(max(x) - min(x))
+}
+
+bc_no_class = dplyr::select(bc, -class)
+bc_class = dplyr::select(bc, class)
+
+bc_normalized = as.data.frame(lapply(bc_no_class, normalize))
+bc = cbind(bc_normalized, bc_class)
 ```
 
 #### Splitting Test and Training Data
@@ -111,13 +122,6 @@ train =  bc %>% dplyr::sample_frac(0.70)
 test  =  dplyr::anti_join(bc, train, by = 'id')
 train = train %>% dplyr::select(-id)
 test = test %>% dplyr::select(-id)
-
-bc2$class = as.factor(bc2$class)
-bc2$id = 1:nrow(bc2)
-train2 =  bc2 %>% dplyr::sample_frac(0.70)
-test2  =  dplyr::anti_join(bc2, train2, by = 'id')
-train2 = train2 %>% dplyr::select(-id)
-test2 = test2 %>% dplyr::select(-id)
 ```
 
 I have assigned 70% (`r nrow(train)` observations) of the data to the training dataset and 30% (`r nrow(test)` observations) of the data to the test dataset.
@@ -126,7 +130,7 @@ I have assigned 70% (`r nrow(train)` observations) of the data to the training d
 
 #### LASSO 
 
-I will build logistic regression models using 10-fold cross validation and the LASSO shrinkage method. The first model will contain uniformity in cell shape while the second will contain uniformity in cell size.
+I will build a logistic regression model using 10-fold cross validation and the LASSO shrinkage method.
 
 ```{r}
 ctrlspecs = trainControl(method = "cv", 
@@ -137,52 +141,30 @@ lambda_vector = 10^seq(5, -5, length = 500)
 
 set.seed(2023)
 
-model1 = train(class ~ ., 
+logistic_lasso = train(class ~ ., 
                 data = train,
                 preProcess = c("center","scale"),
                 method = "glmnet",
                 tuneGrid = expand.grid(alpha = 1, lambda = lambda_vector),
                 trControl = ctrlspecs)
-
-model2 = train(class ~ ., 
-                data = train2,
-                preProcess = c("center","scale"),
-                method = "glmnet",
-                tuneGrid = expand.grid(alpha = 1, lambda = lambda_vector),
-                trControl = ctrlspecs)
 ```
 
-The optimal lambda value for model 1 gives us the following coefficients for the model:
+The optimal lambda value for the LASSO regression gives us the following coefficients for the model:
 
 ```{r}
-coef(model1$finalModel, model1$bestTune$lambda)
+coef(logistic_lasso$finalModel, logistic_lasso$bestTune$lambda)
 ```
 
-There appears to be a positive relationship between every dependent variable and malignant tumor status. The single epithelial cell size was determined to not have an influence on determining malignant tumors. This model has a `r round(max(model1$results$Accuracy) * 100, 2)`% accuracy on the training data.
-
-The optimal lambda value for model 2 gives us the following coefficients for the model:
-
-```{r}
-coef(model2$finalModel, model2$bestTune$lambda)
-```
-
-There appears to be a positive relationship between every dependent variable and malignant tumor status. This model has a `r round(max(model2$results$Accuracy) * 100, 2)`% accuracy on the training data.
+There appears to be a positive relationship between every dependent variable (removing the normal nucleoli variable) and malignant tumor status. The single epithelial cell size was determined to not have an influence on determining malignant tumors. This model has a `r round(max(logistic_lasso$results$Accuracy) * 100, 2)`% accuracy on the training data.
 
 #### Ridge Regression
-I wil also build logistic regression models using 10-fold cross validation and the ridge regression shrinkage method. The first model will contain uniformity in cell shape while the second will contain uniformity in cell size.
+
+I will also build a logistic regression model using 10-fold cross validation and the ridge regression shrinkage method.
 
 ```{r}
-
-model3 = train(class ~ ., 
+set.seed(2023)
+ridge = train(class ~ ., 
                 data = train,
-                preProcess = c("center","scale"),
-                method = "glmnet",
-                tuneGrid = expand.grid(alpha = 0, lambda = lambda_vector),
-                trControl = ctrlspecs,
-                na.action = na.omit)
-
-model4 = train(class ~ ., 
-                data = train2,
                 preProcess = c("center","scale"),
                 method = "glmnet",
                 tuneGrid = expand.grid(alpha = 0, lambda = lambda_vector),
@@ -193,52 +175,56 @@ model4 = train(class ~ .,
 The optimal lambda value for model 3 gives us the following coefficients for the model:
 
 ```{r}
-coef(model3$finalModel, model3$bestTune$lambda)
+coef(ridge$finalModel, ridge$bestTune$lambda)
 ```
 
-There appears to be a positive relationship between every dependent variable and malignant tumor status. The single epithelial cell size was determined to not have an influence on determining malignant tumors. This model has a `r round(max(model3$results$Accuracy) * 100, 2)`% accuracy on the training data.
+There appears to be a positive relationship between every dependent variable and malignant tumor status. This model has a `r round(max(ridge$results$Accuracy) * 100, 2)`% accuracy on the training data.
 
-The optimal lambda value for model 4 gives us the following coefficients for the model:
+#### K-Nearest Neighbors
+
+I will also be running a k-nearest neighbors algorithm to see if it outperforms the logistic regression models. In order to deal with the multicollinearity issue in the data, I will be creating two separate knn models: one with uniformity in cell shape and one with uniformity in cell size These models will also be trained using 10-fold cross validation.
 
 ```{r}
-coef(model4$finalModel, model4$bestTune$lambda)
+train1 = train %>% dplyr::select(-uniformity_of_cell_size)
+train2 = train %>% dplyr::select(-uniformity_of_cell_shape)
+
+set.seed(2023)
+
+knn_cell_shape = train(class ~ .,
+             method     = "knn",
+             tuneGrid   = expand.grid(k = 1:10),
+             trControl  = ctrlspecs,
+             metric     = "Accuracy",
+             data       = train1)
+
+knn_cell_size = train(class ~ .,
+             method     = "knn",
+             tuneGrid   = expand.grid(k = 1:10),
+             trControl  = ctrlspecs,
+             metric     = "Accuracy",
+             data       = train2)
 ```
 
-There appears to be a positive relationship between every dependent variable and malignant tumor status. This model has a `r round(max(model4$results$Accuracy) * 100, 2)`% accuracy on the training data.
+The optimal knn model (containing uniformity in cell shape) has an accuracy of `r round(max(knn_cell_shape$results$Accuracy) * 100, 2)`% in predicting tumor status on the training data. The optimal knn model (containing uniformity in cell size) has an accuracy of `r round(max(knn_cell_size$results$Accuracy) * 100, 2)`%
 
 ## Choosing a Final Model
 
-It appears that model 2 has the highest accuracy at `r round(max(model2$results$Accuracy) * 100, 2)`%, which means I will be selecting model 2 (using LASSO shrinkage and containing the uniformity in cell size variable).
+It appears that ridge logistic regression model has the highest accuracy at `r round(max(ridge$results$Accuracy) * 100, 2)`%, which means I will be selecting this model going forward.
 
 ## Assessing Final Model Performance
 
 Using the test data set aside earlier, the model's accuracy, precision, and recall can be assessed. 
 
 ```{r}
-test_x = test2 %>% 
-  dplyr::select(-class)
+test_new = dplyr::select(test, -class)
+testing_prediction = predict(ridge, newdata = test_new, se = T)
 
-predictions = predict(model2, newdata = test_x)
+confusion = confusionMatrix(data = testing_prediction, reference = test$class)
 
-test2 = cbind(test2, predictions)
-
-test2$class = as.numeric(test2$class)
-test2$predictions = as.numeric(test2$predictions)
-
-test2$difference = test2$class - test2$predictions
-
-correct = sum(test2$difference == 0)
-true_positive = sum(test2['class'] == 2 & test2['predictions'] == 2)
-true_negative = sum(test2['class'] == 1 & test2['predictions'] == 1)
-false_negative = sum(test2$difference == 1)
-false_positive = sum(test2$difference == -1)
-
-accuracy = correct/nrow(test2)
-precision = true_positive/(true_positive + false_positive)
-recall = true_positive/(true_positive + false_negative)
+confusion
 ```
 
-The model has an accuracy of `r round(accuracy*100, 2)`%, a precision of `r round(precision*100, 2)`%, and a recall of `r round(recall*100, 2)`%. This shows that the model has done fairly well in identifying if tumors are benign or malignant. 
+The ridge logistic regression model has an accuracy of 95.24% in predicting tumor status. The model has a recall of 99.25% and a precision of 93.66%. This shows that the model has done fairly well in identifying if tumors are benign or malignant. 
 
 ## Citations:
 
