@@ -654,7 +654,7 @@ validation and the LASSO shrinkage method.</p>
                           number = 10,
                           savePredictions = &quot;all&quot;)
 
-lambda_vector = 10^seq(5, -5, length = 500)
+lambda_vector = exp(seq(5, -5, length = 100))
 
 set.seed(2023)
 
@@ -668,17 +668,17 @@ logistic_lasso = train(class ~ .,
 following coefficients for the model:</p>
 <pre class="r"><code>coef(logistic_lasso$finalModel, logistic_lasso$bestTune$lambda)</code></pre>
 <pre><code>## 10 x 1 sparse Matrix of class &quot;dgCMatrix&quot;
-##                                       s1
-## (Intercept)                 -1.220929427
-## clump_thickness              0.943183769
-## uniformity_of_cell_size      0.577468758
-## uniformity_of_cell_shape     0.598965631
-## marginal_adhesion            0.200492667
-## single_epithelial_cell_size  0.196448213
-## bare_nuclei                  0.901148381
-## bland_chromatin              0.618159157
-## normal_nucleoli              .          
-## mitoses                      0.002902566</code></pre>
+##                                      s1
+## (Intercept)                 -1.22941589
+## clump_thickness              0.95871910
+## uniformity_of_cell_size      0.57415132
+## uniformity_of_cell_shape     0.60973062
+## marginal_adhesion            0.20805752
+## single_epithelial_cell_size  0.20051370
+## bare_nuclei                  0.90571492
+## bland_chromatin              0.62855403
+## normal_nucleoli              .         
+## mitoses                      0.00702973</code></pre>
 <p>There appears to be a positive relationship between every dependent
 variable (removing the normal nucleoli variable) and malignant tumor
 status. The single epithelial cell size was determined to not have an
@@ -695,25 +695,56 @@ ridge = train(class ~ .,
                 preProcess = c(&quot;center&quot;,&quot;scale&quot;),
                 method = &quot;glmnet&quot;,
                 tuneGrid = expand.grid(alpha = 0, lambda = lambda_vector),
-                trControl = ctrlspecs,
-                na.action = na.omit)</code></pre>
-<p>The optimal lambda value for model 3 gives us the following
-coefficients for the model:</p>
+                trControl = ctrlspecs)</code></pre>
+<p>The optimal lambda value for the ridge model gives us the following
+coefficients:</p>
 <pre class="r"><code>coef(ridge$finalModel, ridge$bestTune$lambda)</code></pre>
 <pre><code>## 10 x 1 sparse Matrix of class &quot;dgCMatrix&quot;
 ##                                     s1
-## (Intercept)                 -1.1416235
-## clump_thickness              0.6747429
-## uniformity_of_cell_size      0.4781507
-## uniformity_of_cell_shape     0.5202626
-## marginal_adhesion            0.3594113
-## single_epithelial_cell_size  0.3274860
-## bare_nuclei                  0.6938720
-## bland_chromatin              0.5270107
-## normal_nucleoli              0.2405146
-## mitoses                      0.2767439</code></pre>
+## (Intercept)                 -1.1458523
+## clump_thickness              0.6821468
+## uniformity_of_cell_size      0.4808908
+## uniformity_of_cell_shape     0.5244236
+## marginal_adhesion            0.3613870
+## single_epithelial_cell_size  0.3286386
+## bare_nuclei                  0.6996610
+## bland_chromatin              0.5317872
+## normal_nucleoli              0.2389670
+## mitoses                      0.2796345</code></pre>
 <p>There appears to be a positive relationship between every dependent
 variable and malignant tumor status. This model has a 97.14% accuracy on
+the training data.</p>
+</div>
+<div id="elastic-net" class="section level4">
+<h4>Elastic Net</h4>
+<p>I will also build a logistic regression model using 10-fold cross
+validation and the elastic net regression shrinkage method.</p>
+<pre class="r"><code>alpha_vector = seq(0, 1, length = 20)
+set.seed(2023)
+
+elastic = train(class ~ ., 
+                data = train,
+                preProcess = c(&quot;center&quot;,&quot;scale&quot;),
+                method = &quot;glmnet&quot;,
+                tuneGrid = expand.grid(alpha = alpha_vector, lambda = lambda_vector),
+                trControl = ctrlspecs)</code></pre>
+<p>The optimal alpha value is 0.0526316. The optimal lambda value for
+the elastic net model gives us the following coefficients:</p>
+<pre class="r"><code>coef(elastic$finalModel, elastic$bestTune$lambda)</code></pre>
+<pre><code>## 10 x 1 sparse Matrix of class &quot;dgCMatrix&quot;
+##                                      s1
+## (Intercept)                 -1.32163770
+## clump_thickness              1.01658083
+## uniformity_of_cell_size      0.55606266
+## uniformity_of_cell_shape     0.71363801
+## marginal_adhesion            0.44920427
+## single_epithelial_cell_size  0.35001531
+## bare_nuclei                  0.91200724
+## bland_chromatin              0.74988494
+## normal_nucleoli              0.09657593
+## mitoses                      0.39139411</code></pre>
+<p>There appears to be a positive relationship between every dependent
+variable and malignant tumor status. This model has a 97.34% accuracy on
 the training data.</p>
 </div>
 <div id="k-nearest-neighbors" class="section level4">
@@ -750,16 +781,16 @@ of 96.73%</p>
 </div>
 <div id="choosing-a-final-model" class="section level2">
 <h2>Choosing a Final Model</h2>
-<p>It appears that ridge logistic regression model has the highest
-accuracy at 97.14%, which means I will be selecting this model going
-forward.</p>
+<p>It appears that the elastic net logistic regression model has the
+highest accuracy at 97.34%, which means I will be selecting this model
+going forward.</p>
 </div>
 <div id="assessing-final-model-performance" class="section level2">
 <h2>Assessing Final Model Performance</h2>
 <p>Using the test data set aside earlier, the model’s accuracy,
 precision, and recall can be assessed.</p>
 <pre class="r"><code>test_new = dplyr::select(test, -class)
-testing_prediction = predict(ridge, newdata = test_new, se = T)
+testing_prediction = predict(elastic, newdata = test_new, se = T)
 
 confusion = confusionMatrix(data = testing_prediction, reference = test$class)
 
@@ -768,33 +799,34 @@ confusion</code></pre>
 ## 
 ##           Reference
 ## Prediction   0   1
-##          0 133   9
-##          1   1  67
+##          0 132   9
+##          1   2  67
 ##                                           
-##                Accuracy : 0.9524          
-##                  95% CI : (0.9142, 0.9769)
+##                Accuracy : 0.9476          
+##                  95% CI : (0.9082, 0.9736)
 ##     No Information Rate : 0.6381          
 ##     P-Value [Acc &gt; NIR] : &lt; 2e-16         
 ##                                           
-##                   Kappa : 0.8945          
+##                   Kappa : 0.8843          
 ##                                           
-##  Mcnemar&#39;s Test P-Value : 0.02686         
+##  Mcnemar&#39;s Test P-Value : 0.07044         
 ##                                           
-##             Sensitivity : 0.9925          
+##             Sensitivity : 0.9851          
 ##             Specificity : 0.8816          
-##          Pos Pred Value : 0.9366          
-##          Neg Pred Value : 0.9853          
+##          Pos Pred Value : 0.9362          
+##          Neg Pred Value : 0.9710          
 ##              Prevalence : 0.6381          
-##          Detection Rate : 0.6333          
-##    Detection Prevalence : 0.6762          
-##       Balanced Accuracy : 0.9371          
+##          Detection Rate : 0.6286          
+##    Detection Prevalence : 0.6714          
+##       Balanced Accuracy : 0.9333          
 ##                                           
 ##        &#39;Positive&#39; Class : 0               
 ## </code></pre>
-<p>The ridge logistic regression model has an accuracy of 95.24% in
-predicting tumor status. The model has a recall of 99.25% and a
-precision of 93.66%. This shows that the model has done fairly well in
-identifying if tumors are benign or malignant.</p>
+<p>According to the testing predictions, the elastic net logistic
+regression model has an accuracy of 94.76% in predicting tumor status.
+The model has a recall of 98.51% and a precision of 93.62%. This shows
+that the model has done fairly well in identifying if tumors are benign
+or malignant.</p>
 </div>
 <div id="citations" class="section level2">
 <h2>Citations:</h2>

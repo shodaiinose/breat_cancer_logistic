@@ -137,7 +137,7 @@ ctrlspecs = trainControl(method = "cv",
                           number = 10,
                           savePredictions = "all")
 
-lambda_vector = 10^seq(5, -5, length = 500)
+lambda_vector = exp(seq(5, -5, length = 100))
 
 set.seed(2023)
 
@@ -168,17 +168,40 @@ ridge = train(class ~ .,
                 preProcess = c("center","scale"),
                 method = "glmnet",
                 tuneGrid = expand.grid(alpha = 0, lambda = lambda_vector),
-                trControl = ctrlspecs,
-                na.action = na.omit)
+                trControl = ctrlspecs)
 ```
 
-The optimal lambda value for model 3 gives us the following coefficients for the model:
+The optimal lambda value for the ridge model gives us the following coefficients:
 
 ```{r}
 coef(ridge$finalModel, ridge$bestTune$lambda)
 ```
 
 There appears to be a positive relationship between every dependent variable and malignant tumor status. This model has a `r round(max(ridge$results$Accuracy) * 100, 2)`% accuracy on the training data.
+
+#### Elastic Net
+
+I will also build a logistic regression model using 10-fold cross validation and the elastic net regression shrinkage method.
+
+```{r}
+alpha_vector = seq(0, 1, length = 20)
+set.seed(2023)
+
+elastic = train(class ~ ., 
+                data = train,
+                preProcess = c("center","scale"),
+                method = "glmnet",
+                tuneGrid = expand.grid(alpha = alpha_vector, lambda = lambda_vector),
+                trControl = ctrlspecs)
+```
+
+The optimal alpha value is `r elastic$bestTune$alpha`. The optimal lambda value for the elastic net model gives us the following coefficients:
+
+```{r}
+coef(elastic$finalModel, elastic$bestTune$lambda)
+```
+
+There appears to be a positive relationship between every dependent variable and malignant tumor status. This model has a `r round(max(elastic$results$Accuracy) * 100, 2)`% accuracy on the training data.
 
 #### K-Nearest Neighbors
 
@@ -209,7 +232,7 @@ The optimal knn model (containing uniformity in cell shape) has an accuracy of `
 
 ## Choosing a Final Model
 
-It appears that ridge logistic regression model has the highest accuracy at `r round(max(ridge$results$Accuracy) * 100, 2)`%, which means I will be selecting this model going forward.
+It appears that the elastic net logistic regression model has the highest accuracy at `r round(max(elastic$results$Accuracy) * 100, 2)`%, which means I will be selecting this model going forward.
 
 ## Assessing Final Model Performance
 
@@ -217,14 +240,14 @@ Using the test data set aside earlier, the model's accuracy, precision, and reca
 
 ```{r}
 test_new = dplyr::select(test, -class)
-testing_prediction = predict(ridge, newdata = test_new, se = T)
+testing_prediction = predict(elastic, newdata = test_new, se = T)
 
 confusion = confusionMatrix(data = testing_prediction, reference = test$class)
 
 confusion
 ```
 
-The ridge logistic regression model has an accuracy of 95.24% in predicting tumor status. The model has a recall of 99.25% and a precision of 93.66%. This shows that the model has done fairly well in identifying if tumors are benign or malignant. 
+According to the testing predictions, the elastic net logistic regression model has an accuracy of 94.76% in predicting tumor status. The model has a recall of 98.51% and a precision of 93.62%. This shows that the model has done fairly well in identifying if tumors are benign or malignant. 
 
 ## Citations:
 
