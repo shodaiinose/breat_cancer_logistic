@@ -232,7 +232,23 @@ The optimal knn model (containing uniformity in cell shape) has an accuracy of `
 
 ## Choosing a Final Model
 
-It appears that the elastic net logistic regression model has the highest accuracy at `r round(max(elastic$results$Accuracy) * 100, 2)`%, which means I will be selecting this model going forward.
+```{r}
+set.seed(2023)
+
+resamp = resamples(
+  list(
+    enet = elastic, 
+    lasso = logistic_lasso, 
+    ridge = ridge, 
+    knn_shape = knn_cell_shape,
+    knn_size = knn_cell_size))
+
+summary(resamp)
+
+bwplot(resamp, metric = "Accuracy")
+```
+
+It appears that the elastic net logistic regression model has the highest accuracy, on average, which means I will be selecting this model going forward.
 
 ## Assessing Final Model Performance
 
